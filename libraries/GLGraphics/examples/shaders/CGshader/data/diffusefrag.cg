@@ -1,0 +1,12 @@
+void main(float2 uv                  : TEXCOORD0,
+          float3 normal              : TEXCOORD1,
+          float3 lightDir            : TEXCOORD2,
+	  out float4 color           : COLOR,
+          uniform sampler2D decalMap : TEXUNIT0) { 
+  float NdotL = max(dot(normal, lightDir), 0.0);
+  float4 diffuse = float4( NdotL, NdotL, NdotL, 1);
+	
+  float4 decalColor = tex2D(decalMap, uv); 
+	
+  color = decalColor * diffuse;
+}

@@ -1,0 +1,117 @@
+
+#define FOG
+
+// transformations
+uniform float4x4 worldViewProj : WORLDVIEWPROJECTION;
+uniform float4x4 matViewIT : VIEWINVERSETRANSPOSE;
+uniform float4x4 matModelView : MODELVIEWMATRIX;
+uniform float4x4 matWorld : WORLDMATRIX;
+uniform float4x4 matView: VIEWMATRIX;
+
+float3 cameraPos;
+
+int fogLinear = 0;
+float4 fogColor = float4(0.2, 0.2, 0.2, 1.0);
+float fogDensity = 0.003;
+float fogStart = 0.0;
+float fogEnd = 200.0;
+
+
+
+//------------------------------------
+
+struct vertexInput 
+{
+    float3 position     : POSITION;
+    float4 normal       : NORMAL;
+    float4 diffuse		: COLOR;
+};
+
+ 
+
+struct vertexOutput 
+{
+    float4 position	: POSITION;   
+    float4 diffuse	: TEXCOORD4;
+    float  depth	: TEXCOORD5;
+    float3 worldPos	: TEXCOORD6;
+};
+
+
+
+vertexOutput VS_SimpleDiffuse( in vertexInput IN )
+{
+    vertexOutput OUT = (vertexOutput)0;
+
+	OUT.position = mul( worldViewProj, float4(IN.position, 1) ); 
+
+    float4 Po = float4( IN.position, 1);
+    float3 worldpos = mul(matWorld, Po).xyz;	// in "world" coordinates
+    float3 viewpos = mul(matModelView, Po).xyz;	// in "view" coordinates
+	OUT.worldPos = worldpos;
+	
+	float3 viewE = mul( matView, float4(cameraPos,1) ).xyz;
+	
+#ifdef FOG
+	float dist = distance( viewE, viewpos.xyz );
+	OUT.depth = dist;
+#endif
+
+	OUT.diffuse = IN.diffuse;
+
+    return OUT;
+}
+
+
+float4 PS_SimpleDiffuse( in vertexOutput IN ) : COLOR
+{
+	float4 FinalColor = 0;
+
+	float4 ambient = 0;
+	float4 diffuse = IN.diffuse;
+
+	FinalColor = diffuse;
+//	FinalColor = (ambient + diffuse);
+//	FinalColor.a = IN.diffuse.a;
+
+#ifdef FOG
+	if( fogLinear )
+	{
+		// Apply linear fog
+		if( IN.depth < fogEnd )
+		{
+			FinalColor = lerp( FinalColor, fogColor, (IN.depth-fogStart)/(fogEnd-fogStart) );
+			FinalColor.a = IN.diffuse.a;
+		}
+		else
+		{
+			FinalColor = fogColor;
+		}
+	}
+	else
+	{
+		// Apply exp2 fog
+		// fogFactor = exp(-(density * z)2)
+		// final equation: fogFactor = exp2(density2 * z2 * 1.442695) 
+		float fogFactor = exp2( -fogDensity * fogDensity * IN.depth * IN.depth * 1.442695 );
+		fogFactor = clamp( fogFactor, 0.0, 1.0 );
+		FinalColor = mix( fogColor, FinalColor, fogFactor );
+		FinalColor.a = IN.diffuse.a;
+	}
+#endif
+
+	return FinalColor;
+        //return float4(1.0, 0.0, 0.0, 1.0);
+}
+
+
+
+//---------------------------------------------------------------------------//
+technique Main
+{   
+    pass p0
+    {		
+		VertexProgram = compile arbvp1 VS_SimpleDiffuse();
+		FragmentProgram  = compile arbfp1 PS_SimpleDiffuse();
+	}
+}
